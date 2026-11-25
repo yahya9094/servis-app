@@ -74,10 +74,14 @@
     }
 
     * { box-sizing: border-box; font-family: 'Vazirmatn', sans-serif; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; padding: 0; background: var(--bg); color: var(--text);
+      overflow-x: hidden; overscroll-behavior-y: none;
+    }
     body {
-      margin: 0; padding: 14px; background: var(--bg); color: var(--text);
+      padding: 14px 14px 86px 14px;
       background-image: var(--bg-grad); background-attachment: fixed;
-      min-height: 100vh; padding-bottom: 95px; transition: background 0.3s, color 0.3s;
+      min-height: 100dvh; transition: background 0.3s, color 0.3s;
     }
     .container { max-width: 540px; margin: 0 auto; }
     
@@ -127,7 +131,19 @@
     }
     .today-item.done { border-color: rgba(34, 197, 94, 0.45); background: rgba(34, 197, 94, 0.08); }
     .today-item.absent { border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.07); }
-    .today-top { display: flex; justify-content: space-between; align-items: center; }
+    .today-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .green-dot {
+      display: inline-block; width: 11px; height: 11px; border-radius: 50%;
+      background: #22c55e; box-shadow: 0 0 8px #22c55e; margin-left: 7px; vertical-align: middle;
+    }
+    .btn-settle-item {
+      background: rgba(34, 197, 94, 0.14); color: var(--success); border: 1px solid rgba(34, 197, 94, 0.35);
+      padding: 5px 9px; border-radius: 8px; cursor: pointer; font-size: 0.74rem; font-weight: 700;
+    }
+    .settled-tag {
+      font-size: 0.72rem; color: var(--success); background: rgba(34, 197, 94, 0.1);
+      padding: 3px 8px; border-radius: 7px; border: 1px solid rgba(34, 197, 94, 0.25);
+    }
     .today-actions { display: flex; gap: 8px; }
     .today-actions button { flex: 1; justify-content: center; }
 
@@ -253,8 +269,8 @@
         <select id="extraSplitMode">
           <option value="PER_PERSON">مبلغ واردشده برای «هر نفر» جداگانه حساب شود</option>
           <option value="SPLIT">مبلغ واردشده بین افراد انتخاب‌شده «تقسیم» شود</option>
-        </select>
-      </div>
+      <div style="font-size:0.78rem; color:var(--muted); margin-bottom:6px;">چه کسانی رفتند؟ (انتخاب چند نفر = ثبت به عنوان یک کلاس مشترک):</div>
+      <div class="pills-wrap" id="extraPersonPills"></div>
 
       <div class="grid-2">
         <input type="text" id="extraTitle" placeholder="نام مسیر (مثلاً: کلاس جبرانی)">
@@ -285,8 +301,8 @@
         <select id="schedSplitMode">
           <option value="PER_PERSON">مبلغ برای «هر نفر» جداگانه ثبت شود</option>
           <option value="SPLIT">مبلغ کل بین این افراد «تقسیم» شود</option>
-        </select>
-      </div>
+      <div style="font-size:0.78rem; color:var(--muted); margin-bottom:6px;">۲. انتخاب افراد (تکی یا چند نفر هم‌زمان برای کلاس دوتایی):</div>
+      <div class="pills-wrap" id="schedPersonPills"></div>
 
       <div class="grid-2">
         <input type="text" id="schedTitle" placeholder="عنوان (مثلاً: رفت و برگشت مدرسه)">
@@ -297,8 +313,8 @@
 
     <!-- پوشه‌های برنامه‌های هر فرد -->
     <div class="card">
-      <div class="card-title" style="margin-bottom:10px;">📁 پوشه برنامه کلاس‌های هر نفر</div>
-      <p style="font-size:0.76rem; color:var(--muted); margin-top:0;">روی اسم هر نفر بزنید تا برنامه هفتگی او باز شود:</p>
+      <div class="card-title" style="margin-bottom:10px;">📁 پوشه برنامه‌های هفتگی</div>
+      <p style="font-size:0.76rem; color:var(--muted); margin-top:0;">کلاس‌های تکی در پوشه هر فرد و کلاس‌های دوتایی/مشترک در پوشه جداگانه قرار دارند:</p>
       <div id="personFolders"></div>
     </div>
   </div>
@@ -519,56 +535,15 @@
 
       if (pRes.data && pRes.data.length > 0) {
         state.people = pRes.data;
+      } else if (pRes.data && pRes.data.length === 0) {
+        state.people = [];
       } else if (state.people.length === 0) {
         state.people = [{ id: 1, name: 'یحیی' }, { id: 2, name: 'خواهرم' }];
       }
 
       if (sRes.data) state.schedule = sRes.data;
       if (tRes.data) state.trips = tRes.data;
-
-      if (state.selectedExtraPeople.length === 0 && state.people.length > 0) {
-        state.selectedExtraPeople = [state.people[0].name];
-      }
-      if (state.selectedSchedPeople.length === 0 && state.people.length > 0) {
-        state.selectedSchedPeople = [state.people[0].name];
-      }
-
-      renderAll();
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
-  // همگام‌سازی بین گوشی‌ها
-  function isWebSocketAllowed() {
-    try {
-      if (window.location.protocol === 'blob:' || window.location.hostname.includes('scf.usercontent.goog')) return false;
-      return typeof WebSocket !== 'undefined';
-    } catch { return false; }
-  }
-
-  function initSync() {
-    const badge = document.getElementById('syncStatus');
-    if (!isWebSocketAllowed()) {
-      badge.textContent = '● هماهنگ‌سازی خودکار';
-      setInterval(loadData, 4000);
-      return;
-    }
-    try {
-      db.channel('realtime-sync')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, loadData)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'weekly_schedule' }, loadData)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'people' }, loadData)
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') badge.textContent = '● آنلاین و هماهنگ';
-        });
-    } catch {
-      setInterval(loadData, 4000);
-    }
-  }
-  initSync();
-
-  // تایید انجام یا ثبت «نرفتم» برای برنامه روزانه
+  // تایید انجام یا ثبت «نرفتم» برای برنامه روزانه (تکی یا گروهی با یک تایید)
   async function recordTodayStatus(item, isPresent) {
     const trip_date = dateInput.value;
     const { error } = await db.from('trips').insert([{
@@ -578,7 +553,7 @@
       trip_date: trip_date
     }]);
     if (!error) {
-      showToast(isPresent ? `✅ تایید شد: ${item.person}` : `❌ غیبت ثبت شد: ${item.person}`);
+      showToast(isPresent ? `🟢 تایید شد: ${item.person}` : `🟢 ثبت شد (نرفتم): ${item.person}`);
       loadData();
     } else {
       showToast('خطا: ' + error.message);
@@ -589,7 +564,8 @@
   async function confirmAllToday() {
     const selDateStr = dateInput.value;
     const dayOfWeek = new Date(selDateStr + 'T12:00:00').getDay();
-    const todaysPlanned = state.schedule.filter(s => s.day_of_week === dayOfWeek);
+    const activePeopleNames = state.people.map(p => p.name);
+    const todaysPlanned = state.schedule.filter(s => s.day_of_week === dayOfWeek && isScheduleValidForActivePeople(s, activePeopleNames));
     const todaysConfirmed = state.trips.filter(t => t.trip_date === selDateStr);
 
     const remaining = todaysPlanned.filter(item =>
@@ -611,80 +587,90 @@
     }
   }
 
-  async function unconfirmTrip(tripId) {
-    await db.from('trips').delete().eq('id', tripId);
-    showToast('وضعیت بازگردانی شد');
-    loadData();
+  function unconfirmTrip(tripId) {
+    askConfirm('آیا مطمئن هستید که می‌خواهید وضعیت این کلاس را لغو کنید؟', async () => {
+      await db.from('trips').delete().eq('id', tripId);
+      showToast('وضعیت لغو شد');
+      loadData();
+    });
   }
 
-  // ثبت مسیر اضافه (تکی یا چند نفره هم‌زمان)
+  // ثبت مسیر اضافه (تکی یا گروهی بدون تقسیم قیمت)
   async function addExtraTrip() {
     const people = state.selectedExtraPeople;
     const trip_type = document.getElementById('extraTitle').value.trim();
     const rawAmount = parseRawNumber(document.getElementById('extraPrice').value);
-    const splitMode = document.getElementById('extraSplitMode').value;
     const trip_date = dateInput.value;
 
     if (people.length === 0) return showToast('حداقل یک نفر را انتخاب کنید');
     if (!trip_type || !rawAmount) return showToast('عنوان مسیر و مبلغ را وارد کنید');
 
-    const finalAmount = (people.length > 1 && splitMode === 'SPLIT')
-      ? Math.round(rawAmount / people.length)
-      : rawAmount;
-
-    const rows = people.map(p => ({
-      person: p,
+    const personLabel = people.join(' و ');
+    const { error } = await db.from('trips').insert([{
+      person: personLabel,
       trip_type: people.length > 1 ? `${trip_type} (مشترک)` : trip_type,
-      amount: finalAmount,
+      amount: rawAmount,
       trip_date
-    }));
+    }]);
 
-    const { error } = await db.from('trips').insert(rows);
     if (!error) {
       document.getElementById('extraTitle').value = '';
       document.getElementById('extraPrice').value = '';
-      showToast(`✅ مسیر اضافه برای ${people.length} نفر ثبت شد`);
+      showToast(`🟢 مسیر برای «${personLabel}» ثبت شد`);
       loadData();
     } else {
       showToast('خطا: ' + error.message);
     }
   }
 
-  // ثبت برنامه ثابت هفتگی (چند روز + چند نفر هم‌زمان)
+  // ثبت برنامه ثابت هفتگی (چند روز هم‌زمان + کلاس دوتایی/مشترک در یک ردیف بدون تقسیم)
   async function addScheduleItem() {
     const people = state.selectedSchedPeople;
     const title = document.getElementById('schedTitle').value.trim();
     const rawPrice = parseRawNumber(document.getElementById('schedPrice').value);
-    const splitMode = document.getElementById('schedSplitMode').value;
 
     if (people.length === 0) return showToast('حداقل یک نفر را انتخاب کنید');
     if (!title || !rawPrice) return showToast('عنوان و مبلغ را وارد کنید');
 
-    const finalPrice = (people.length > 1 && splitMode === 'SPLIT')
-      ? Math.round(rawPrice / people.length)
-      : rawPrice;
-
-    const rows = [];
-    state.selectedSchedDays.forEach(dayId => {
-      people.forEach(p => {
-        rows.push({ day_of_week: dayId, person: p, title, price: finalPrice });
-      });
-    });
+    const personLabel = people.join(' و ');
+    const rows = state.selectedSchedDays.map(dayId => ({
+      day_of_week: dayId,
+      person: personLabel,
+      title,
+      price: rawPrice
+    }));
 
     const { error } = await db.from('weekly_schedule').insert(rows);
     if (!error) {
       document.getElementById('schedTitle').value = '';
       document.getElementById('schedPrice').value = '';
-      showToast('📅 در برنامه هفتگی ذخیره شد');
+      showToast(`📅 برنامه برای «${personLabel}» ذخیره شد`);
       loadData();
     } else {
       showToast('خطا: ' + error.message);
     }
   }
 
-  // قابلیت ۱: تسویه حساب با راننده (ثبت نقطه تسویه در تاریخچه بدون پاک شدن داده‌ها)
+  // تسویه تکی برای هر رفت‌وآمد
+  function settleSingleTrip(trip) {
+    askConfirm(`آیا مطمئن هستید که کرایه «${trip.person} - ${trip.trip_type.replace(' (نرفتم)', '')}» تسویه شد؟`, async () => {
+      const cleanType = trip.trip_type.includes('[تسویه شده]') ? trip.trip_type : `${trip.trip_type} [تسویه شده]`;
+      const { error } = await db.from('trips').update({ trip_type: cleanType }).eq('id', trip.id);
+      if (!error) {
+        showToast('🤝 این رفت‌وآمد تسویه شد');
+        loadData();
+      }
+    });
+  }
+
+  function isScheduleValidForActivePeople(schedItem, activeNames) {
+    const members = schedItem.person.split(' و ').map(s => s.trim());
+    return members.every(m => activeNames.includes(m));
+  }
+
+  // قابلیت ۱: تسویه حساب کامل با راننده
   function settleAccount() {
-    askConfirm('آیا با راننده تسویه حساب کردید؟ (بدهی فعلی صفر می‌شود و شمارش دوره جدید از همین لحظه شروع می‌شود)', async () => {
+    askConfirm('آیا مطمئن هستید که کل حساب با راننده تسویه شده است؟', async () => {
       const today = new Date().toISOString().split('T')[0];
       const { error } = await db.from('trips').insert([{
         person: 'سیستم',
@@ -700,15 +686,17 @@
   }
 
   function deleteScheduleItem(id) {
-    askConfirm('این مورد از برنامه ثابت حذف شود؟', async () => {
+    askConfirm('آیا مطمئن هستید که می‌خواهید این مورد را از برنامه هفته حذف کنید؟', async () => {
       await db.from('weekly_schedule').delete().eq('id', id);
+      showToast('حذف شد');
       loadData();
     });
   }
 
   function deleteTripRecord(id) {
-    askConfirm('این رکورد حذف شود؟', async () => {
+    askConfirm('آیا مطمئن هستید که می‌خواهید این رکورد را برای همیشه حذف کنید؟', async () => {
       await db.from('trips').delete().eq('id', id);
+      showToast('حذف شد');
       loadData();
     });
   }
@@ -722,15 +710,20 @@
     loadData();
   }
 
-  function deletePerson(id) {
-    askConfirm('این فرد حذف شود؟', async () => {
+  function deletePerson(id, name) {
+    askConfirm(`آیا مطمئن هستید که می‌خواهید «${name}» و برنامه‌های هفتگی او را حذف کنید؟`, async () => {
       await db.from('people').delete().eq('id', id);
+      const relatedSchedules = state.schedule.filter(s => s.person.split(' و ').map(x => x.trim()).includes(name));
+      for (const item of relatedSchedules) {
+        await db.from('weekly_schedule').delete().eq('id', item.id);
+      }
+      showToast(`«${name}» حذف شد`);
       loadData();
     });
   }
 
-  function toggleFolder(name) {
-    state.openFolders[name] = !state.openFolders[name];
+  function toggleFolder(key) {
+    state.openFolders[key] = !state.openFolders[key];
     renderAll();
   }
 
@@ -740,14 +733,12 @@
       const active = state.selectedExtraPeople.includes(p.name);
       return `<button type="button" class="pill-btn ${active ? 'active' : ''}" onclick="toggleMultiSelect(state.selectedExtraPeople, '${p.name}')">${active ? '✓ ' : '👤 '}${p.name}</button>`;
     }).join('');
-    document.getElementById('extraSplitBox').classList.toggle('hidden', state.selectedExtraPeople.length <= 1);
 
     // دکمه‌های چند انتخابی افراد در تب برنامه هفته
     document.getElementById('schedPersonPills').innerHTML = state.people.map(p => {
       const active = state.selectedSchedPeople.includes(p.name);
       return `<button type="button" class="pill-btn ${active ? 'active' : ''}" onclick="toggleMultiSelect(state.selectedSchedPeople, '${p.name}')">${active ? '✓ ' : '👤 '}${p.name}</button>`;
     }).join('');
-    document.getElementById('schedSplitBox').classList.toggle('hidden', state.selectedSchedPeople.length <= 1);
 
     // 1. رندر تب «تایید امروز»
     const selDateStr = dateInput.value;
@@ -755,7 +746,8 @@
     const dayObj = DAYS.find(d => d.id === dayOfWeek);
     document.getElementById('todayDayLabel').textContent = `برنامه ${dayObj ? dayObj.name : ''} (${toPersianDate(selDateStr)})`;
 
-    const todaysPlanned = state.schedule.filter(s => s.day_of_week === dayOfWeek);
+    const activePeopleNames = state.people.map(p => p.name);
+    const todaysPlanned = state.schedule.filter(s => s.day_of_week === dayOfWeek && isScheduleValidForActivePeople(s, activePeopleNames));
     const todaysConfirmed = state.trips.filter(t => t.trip_date === selDateStr);
 
     const remainingCount = todaysPlanned.filter(item =>
@@ -770,6 +762,7 @@
       </div>`;
     } else {
       checklistEl.innerHTML = todaysPlanned.map(item => {
+        const isGroup = item.person.includes(' و ');
         const matched = todaysConfirmed.find(t => t.person === item.person && t.trip_type.startsWith(item.title));
         if (matched) {
           const wasAbsent = matched.trip_type.includes('(نرفتم)');
@@ -777,8 +770,9 @@
             <div class="today-item ${wasAbsent ? 'absent' : 'done'}">
               <div class="today-top">
                 <div>
-                  <strong>👤 ${item.person} — ${item.title}</strong>
-                  <div style="font-size:0.8rem; color:${wasAbsent ? 'var(--danger)' : 'var(--success)'}; margin-top:3px;">
+                  <span class="green-dot" title="وضعیت ثبت شد"></span>
+                  <strong>${isGroup ? '👥' : '👤'} ${item.person} — ${item.title}</strong>
+                  <div style="font-size:0.8rem; color:${wasAbsent ? 'var(--danger)' : 'var(--success)'}; margin-top:4px; padding-right:18px;">
                     ${wasAbsent ? '❌ ثبت شده: نرفتم (۰ تومان)' : `✅ تایید شد (${formatMoney(matched.amount)})`}
                   </div>
                 </div>
@@ -790,7 +784,7 @@
           return `
             <div class="today-item">
               <div class="today-top">
-                <strong>👤 ${item.person} — ${item.title}</strong>
+                <strong>${isGroup ? '👥' : '👤'} ${item.person} — ${item.title}</strong>
                 <span style="color:var(--primary); font-weight:700; font-size:0.88rem;">${formatMoney(item.price)}</span>
               </div>
               <div class="today-actions">
@@ -803,18 +797,178 @@
       }).join('');
     }
 
-    // 2. رندر تب «برنامه هفته» + پوشه افراد
+    // 2. رندر تب «برنامه هفته» + پوشه افراد + پوشه کلاس‌های دوتایی/مشترک
     document.getElementById('dayPills').innerHTML = DAYS.map(d => {
       const isSelected = state.selectedSchedDays.includes(d.id);
       return `<button type="button" class="pill-btn ${isSelected ? 'active' : ''}" onclick="toggleMultiSelect(state.selectedSchedDays, ${d.id})">${isSelected ? '✓ ' : ''}${d.name}</button>`;
     }).join('');
 
-    // پوشه‌بندی افراد پایین برنامه هفته
-    document.getElementById('personFolders').innerHTML = state.people.map(p => {
+    const dayOrder = [6, 0, 1, 2, 3, 4, 5];
+    const renderFolderItems = (items) => {
+      if (items.length === 0) return '<div style="color:var(--muted); font-size:0.8rem; padding-top:8px;">هنوز برنامه‌ای در این پوشه ثبت نشده است.</div>';
+      const sorted = [...items].sort((a, b) => dayOrder.indexOf(a.day_of_week) - dayOrder.indexOf(b.day_of_week));
+      return sorted.map(s => {
+        const dName = DAYS.find(d => d.id === s.day_of_week)?.name || '';
+        const isGroup = s.person.includes(' و ');
+        return `
+          <div class="log-item">
+            <div>
+              <span style="background:rgba(234,179,8,0.16); color:var(--primary); padding:2px 7px; border-radius:6px; font-size:0.74rem; margin-left:6px;">${dName}</span>
+              <span>${s.title}</span>
+              ${isGroup ? `<span style="font-size:0.75rem; color:var(--muted);"> (${s.person})</span>` : ''}
+              <div style="font-size:0.78rem; color:var(--primary); margin-top:2px;">${formatMoney(s.price)}</div>
+            </div>
+            <button class="del-btn" onclick="deleteScheduleItem(${s.id})">حذف</button>
+          </div>
+        `;
+      }).join('');
+    };
+
+    // پوشه اختصاصی کلاس‌های دوتایی و مشترک
+    const groupItems = state.schedule.filter(s => s.person.includes(' و ') && isScheduleValidForActivePeople(s, activePeopleNames));
+    const isGroupOpen = !!state.openFolders['__GROUP__'];
+    const groupFolderHtml = `
+      <div class="folder-card" style="border-color: rgba(234, 179, 8, 0.35);">
+        <div class="folder-header" onclick="toggleFolder('__GROUP__')">
+          <span>👥 پوشه <strong>کلاس‌های دوتایی و مشترک</strong> (${groupItems.length} مورد)</span>
+          <span>${isGroupOpen ? '▲' : '▼'}</span>
+        </div>
+        ${isGroupOpen ? `<div class="folder-body">${renderFolderItems(groupItems)}</div>` : ''}
+      </div>
+    `;
+
+    // پوشه‌های انفرادی هر فرد
+    const individualFoldersHtml = state.people.map(p => {
       const personItems = state.schedule.filter(s => s.person === p.name);
       const isOpen = !!state.openFolders[p.name];
-      // مرتب‌سازی بر اساس روزهای هفته از شنبه تا جمعه
-      const dayOrder = [6, 0, 1, 2, 3, 4, 5];<!DOCTYPE html>
+      return `
+        <div class="folder-card">
+          <div class="folder-header" onclick="toggleFolder('${p.name}')">
+            <span>📁 پوشه کلاس‌های <strong>${p.name}</strong> (${personItems.length} مورد)</span>
+            <span>${isOpen ? '▲' : '▼'}</span>
+          </div>
+          ${isOpen ? `<div class="folder-body">${renderFolderItems(personItems)}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+
+    document.getElementById('personFolders').innerHTML = groupFolderHtml + individualFoldersHtml;
+
+    // 3. رندر تب «گزارش مالی» (پشتیبانی از تسویه تکی و تسویه کلی + آمار حضور و غیبت)
+    const lastSettleIndex = state.trips.findIndex(t => t.person === 'سیستم' && t.trip_type.includes('تسویه حساب'));
+    const periodTrips = lastSettleIndex === -1 ? state.trips : state.trips.slice(0, lastSettleIndex);
+
+    const monthAgo = new Date();
+    monthAgo.setDate(monthAgo.getDate() - 30);
+
+    let unsettledSum = 0, monthSum = 0;
+    const statsPerGroup = {};
+    state.people.forEach(p => {
+      statsPerGroup[p.name] = { amount: 0, presentCount: 0, absentCount: 0 };
+    });
+
+    periodTrips.forEach(t => {
+      if (t.person === 'سیستم') return;
+      const isItemSettled = t.trip_type.includes('[تسویه شده]');
+      const amt = isItemSettled ? 0 : Number(t.amount);
+      unsettledSum += amt;
+
+      if (!statsPerGroup[t.person]) statsPerGroup[t.person] = { amount: 0, presentCount: 0, absentCount: 0 };
+      statsPerGroup[t.person].amount += amt;
+      if (t.trip_type.includes('(نرفتم)')) statsPerGroup[t.person].absentCount++;
+      else statsPerGroup[t.person].presentCount++;
+    });
+
+    state.trips.forEach(t => {
+      if (t.person === 'سیستم') return;
+      if (new Date(t.trip_date) >= monthAgo) monthSum += Number(t.amount);
+    });
+
+    document.getElementById('unsettledTotal').textContent = formatMoney(unsettledSum);
+    document.getElementById('monthTotal').textContent = formatMoney(monthSum);
+
+    document.getElementById('personBreakdown').innerHTML = Object.keys(statsPerGroup)
+      .filter(k => statsPerGroup[k].presentCount > 0 || statsPerGroup[k].absentCount > 0 || activePeopleNames.includes(k))
+      .map(name => {
+        const st = statsPerGroup[name];
+        const isGroup = name.includes(' و ');
+        return `
+          <div class="today-item" style="margin-bottom:8px;">
+            <div class="today-top">
+              <div>
+                <strong>${isGroup ? '👥' : '👤'} ${name}</strong>
+                <div style="font-size:0.78rem; color:var(--muted); margin-top:3px;">
+                  ✅ ${st.presentCount} سرویس رفت &nbsp;|&nbsp; ❌ ${st.absentCount} غیبت
+                </div>
+              </div>
+              <div style="color:var(--primary); font-weight:700; font-size:0.95rem;">${formatMoney(st.amount)}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+    const filterSel = document.getElementById('filterPerson');
+    const curFilter = filterSel.value;
+    const allTripOwners = [...new Set([...activePeopleNames, ...state.trips.filter(t => t.person !== 'سیستم').map(t => t.person)])];
+    filterSel.innerHTML = `<option value="ALL">همه موارد</option>` +
+      allTripOwners.map(name => `<option value="${name}" ${curFilter === name ? 'selected' : ''}>${name}</option>`).join('');
+
+    const filtered = curFilter === 'ALL' ? state.trips : state.trips.filter(t => t.person === curFilter);
+    document.getElementById('fullLogs').innerHTML = filtered.map((t, idx) => {
+      if (t.person === 'سیستم') {
+        return `<div class="log-item" style="justify-content:center; color:var(--success); font-weight:700;">${t.trip_type} (${toPersianDate(t.trip_date)})</div>`;
+      }
+      const isGlobalSettled = lastSettleIndex !== -1 && idx > lastSettleIndex;
+      const isSingleSettled = t.trip_type.includes('[تسویه شده]');
+      const isSettled = isGlobalSettled || isSingleSettled;
+      const cleanTitle = t.trip_type.replace(' [تسویه شده]', '');
+
+      return `
+        <div class="log-item">
+          <div>
+            <strong>${t.person}</strong> — ${cleanTitle}
+            <div style="font-size:0.75rem; color:var(--muted);">${toPersianDate(t.trip_date)}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+            <span style="color:${isSettled ? 'var(--muted)' : 'var(--primary)'}; text-decoration:${isSettled ? 'line-through' : 'none'};">${formatMoney(t.amount)}</span>
+            ${isSettled
+              ? `<span class="settled-tag">✓ تسویه شده</span>`
+              : (Number(t.amount) > 0 ? `<button class="btn-settle-item" onclick='settleSingleTrip(${JSON.stringify(t)})'>تسویه شد</button>` : '')
+            }
+            <button class="del-btn" onclick="deleteTripRecord(${t.id})">حذف</button>
+          </div>
+        </div>
+      `;
+    }).join('') || '<div style="color:var(--muted);">هنوز ترددی ثبت نشده است.</div>';
+
+    // 4. رندر تب «تنظیمات» (مدیریت افراد)
+    document.getElementById('peopleManageList').innerHTML = state.people.map(p => `
+      <div class="log-item">
+        <span>👤 ${p.name}</span>
+        <button class="del-btn" onclick="deletePerson(${p.id}, '${p.name}')">حذف</button>
+      </div>
+    `).join('');
+  }
+
+  function copyReport() {
+    let text = `📊 صورت‌حساب سرویس مدرسه\n`;
+    text += `• جمع بدهی قابل پرداخت: ${document.getElementById('unsettledTotal').textContent}\n\n`;
+    document.querySelectorAll('#personBreakdown .today-item').forEach(el => {
+      text += `- ${el.innerText.replace(/\n+/g, ' | ')}\n`;
+    });
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('📋 صورت‌حساب کپی شد!');
+  }
+
+  loadData();
+</script>
+</body>
+</html><!DOCTYPE html>
 <html lang="fa" dir="rtl" data-theme="gold">
 <head>
   <meta charset="UTF-8">
@@ -890,10 +1044,14 @@
     }
 
     * { box-sizing: border-box; font-family: 'Vazirmatn', sans-serif; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; padding: 0; background: var(--bg); color: var(--text);
+      overflow-x: hidden; overscroll-behavior-y: none;
+    }
     body {
-      margin: 0; padding: 14px; background: var(--bg); color: var(--text);
+      padding: 14px 14px 86px 14px;
       background-image: var(--bg-grad); background-attachment: fixed;
-      min-height: 100vh; padding-bottom: 95px; transition: background 0.3s, color 0.3s;
+      min-height: 100dvh; transition: background 0.3s, color 0.3s;
     }
     .container { max-width: 540px; margin: 0 auto; }
     
@@ -943,7 +1101,19 @@
     }
     .today-item.done { border-color: rgba(34, 197, 94, 0.45); background: rgba(34, 197, 94, 0.08); }
     .today-item.absent { border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.07); }
-    .today-top { display: flex; justify-content: space-between; align-items: center; }
+    .today-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .green-dot {
+      display: inline-block; width: 11px; height: 11px; border-radius: 50%;
+      background: #22c55e; box-shadow: 0 0 8px #22c55e; margin-left: 7px; vertical-align: middle;
+    }
+    .btn-settle-item {
+      background: rgba(34, 197, 94, 0.14); color: var(--success); border: 1px solid rgba(34, 197, 94, 0.35);
+      padding: 5px 9px; border-radius: 8px; cursor: pointer; font-size: 0.74rem; font-weight: 700;
+    }
+    .settled-tag {
+      font-size: 0.72rem; color: var(--success); background: rgba(34, 197, 94, 0.1);
+      padding: 3px 8px; border-radius: 7px; border: 1px solid rgba(34, 197, 94, 0.25);
+    }
     .today-actions { display: flex; gap: 8px; }
     .today-actions button { flex: 1; justify-content: center; }
 
@@ -1062,15 +1232,8 @@
       <div class="card-header">
         <span class="card-title">➕ ثبت مسیر یا کلاس اضافه</span>
       </div>
-      <div style="font-size:0.78rem; color:var(--muted); margin-bottom:6px;">چه کسانی رفتند؟ (می‌توانید چند نفر را با هم بزنید):</div>
+      <div style="font-size:0.78rem; color:var(--muted); margin-bottom:6px;">چه کسانی رفتند؟ (انتخاب چند نفر = ثبت به عنوان یک کلاس مشترک):</div>
       <div class="pills-wrap" id="extraPersonPills"></div>
-
-      <div id="extraSplitBox" class="hidden" style="margin-bottom:10px;">
-        <select id="extraSplitMode">
-          <option value="PER_PERSON">مبلغ واردشده برای «هر نفر» جداگانه حساب شود</option>
-          <option value="SPLIT">مبلغ واردشده بین افراد انتخاب‌شده «تقسیم» شود</option>
-        </select>
-      </div>
 
       <div class="grid-2">
         <input type="text" id="extraTitle" placeholder="نام مسیر (مثلاً: کلاس جبرانی)">
@@ -1094,15 +1257,8 @@
       </div>
       <div class="pills-wrap" id="dayPills"></div>
 
-      <div style="font-size:0.78rem; color:var(--muted); margin-bottom:6px;">۲. انتخاب افراد (تکی یا چند نفر هم‌زمان):</div>
+      <div style="font-size:0.78rem; color:var(--muted); margin-bottom:6px;">۲. انتخاب افراد (تکی یا چند نفر هم‌زمان برای کلاس دوتایی):</div>
       <div class="pills-wrap" id="schedPersonPills"></div>
-
-      <div id="schedSplitBox" class="hidden" style="margin-bottom:10px;">
-        <select id="schedSplitMode">
-          <option value="PER_PERSON">مبلغ برای «هر نفر» جداگانه ثبت شود</option>
-          <option value="SPLIT">مبلغ کل بین این افراد «تقسیم» شود</option>
-        </select>
-      </div>
 
       <div class="grid-2">
         <input type="text" id="schedTitle" placeholder="عنوان (مثلاً: رفت و برگشت مدرسه)">
@@ -1113,8 +1269,8 @@
 
     <!-- پوشه‌های برنامه‌های هر فرد -->
     <div class="card">
-      <div class="card-title" style="margin-bottom:10px;">📁 پوشه برنامه کلاس‌های هر نفر</div>
-      <p style="font-size:0.76rem; color:var(--muted); margin-top:0;">روی اسم هر نفر بزنید تا برنامه هفتگی او باز شود:</p>
+      <div class="card-title" style="margin-bottom:10px;">📁 پوشه برنامه‌های هفتگی</div>
+      <p style="font-size:0.76rem; color:var(--muted); margin-top:0;">کلاس‌های تکی در پوشه هر فرد و کلاس‌های دوتایی/مشترک در پوشه جداگانه قرار دارند:</p>
       <div id="personFolders"></div>
     </div>
   </div>
@@ -1344,10 +1500,9 @@
       if (sRes.data) state.schedule = sRes.data;
       if (tRes.data) state.trips = tRes.data;
 
-      // پاکسازی اسامی حذف‌شده از انتخاب‌های فعلی
-      const activeNames = state.people.map(p => p.name);
-      state.selectedExtraPeople = state.selectedExtraPeople.filter(n => activeNames.includes(n));
-      state.selectedSchedPeople = state.selectedSchedPeople.filter(n => activeNames.includes(n));
+      const validNames = state.people.map(p => p.name);
+      state.selectedExtraPeople = state.selectedExtraPeople.filter(n => validNames.includes(n));
+      state.selectedSchedPeople = state.selectedSchedPeople.filter(n => validNames.includes(n));
 
       if (state.selectedExtraPeople.length === 0 && state.people.length > 0) {
         state.selectedExtraPeople = [state.people[0].name];
@@ -1355,43 +1510,37 @@
       if (state.selectedSchedPeople.length === 0 && state.people.length > 0) {
         state.selectedSchedPeople = [state.people[0].name];
       }
-
-      renderAll();
-    } catch (err) {
-      console.error(err);
+    } catch (e) {
+      console.error(e);
     }
+    renderAll();
   }
 
-  // همگام‌سازی بین گوشی‌ها
-  function isWebSocketAllowed() {
+  // همگام‌سازی لحظه‌ای بین گوشی شما و خواهرتان
+  function initRealtime() {
+    let canUseWS = false;
     try {
-      if (window.location.protocol === 'blob:' || window.location.hostname.includes('scf.usercontent.goog')) return false;
-      return typeof WebSocket !== 'undefined';
-    } catch { return false; }
-  }
-
-  function initSync() {
-    const badge = document.getElementById('syncStatus');
-    if (!isWebSocketAllowed()) {
-      badge.textContent = '● هماهنگ‌سازی خودکار';
-      setInterval(loadData, 4000);
-      return;
+      const testUrl = SUPABASE_URL.replace('https://', 'wss://') + '/realtime/v1/websocket?apikey=' + SUPABASE_KEY + '&vsn=1.0.0';
+      const ws = new WebSocket(testUrl);
+      ws.close();
+      canUseWS = true;
+    } catch (e) {
+      canUseWS = false;
     }
-    try {
-      db.channel('realtime-sync')
+
+    if (canUseWS) {
+      db.channel('service-sync')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, loadData)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'weekly_schedule' }, loadData)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'people' }, loadData)
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') badge.textContent = '● آنلاین و هماهنگ';
-        });
-    } catch {
+        .subscribe();
+    } else {
       setInterval(loadData, 4000);
     }
   }
-  initSync();
+  initRealtime();
 
-  // تایید انجام یا ثبت «نرفتم» برای برنامه روزانه
+  // تایید انجام یا ثبت «نرفتم» برای برنامه روزانه (تکی یا گروهی با یک تایید)
   async function recordTodayStatus(item, isPresent) {
     const trip_date = dateInput.value;
     const { error } = await db.from('trips').insert([{
@@ -1401,7 +1550,7 @@
       trip_date: trip_date
     }]);
     if (!error) {
-      showToast(isPresent ? `✅ تایید شد: ${item.person}` : `❌ غیبت ثبت شد: ${item.person}`);
+      showToast(isPresent ? `🟢 تایید شد: ${item.person}` : `🟢 ثبت شد (نرفتم): ${item.person}`);
       loadData();
     } else {
       showToast('خطا: ' + error.message);
@@ -1412,7 +1561,8 @@
   async function confirmAllToday() {
     const selDateStr = dateInput.value;
     const dayOfWeek = new Date(selDateStr + 'T12:00:00').getDay();
-    const todaysPlanned = state.schedule.filter(s => s.day_of_week === dayOfWeek);
+    const activePeopleNames = state.people.map(p => p.name);
+    const todaysPlanned = state.schedule.filter(s => s.day_of_week === dayOfWeek && isScheduleValidForActivePeople(s, activePeopleNames));
     const todaysConfirmed = state.trips.filter(t => t.trip_date === selDateStr);
 
     const remaining = todaysPlanned.filter(item =>
@@ -1434,80 +1584,90 @@
     }
   }
 
-  async function unconfirmTrip(tripId) {
-    await db.from('trips').delete().eq('id', tripId);
-    showToast('وضعیت بازگردانی شد');
-    loadData();
+  function unconfirmTrip(tripId) {
+    askConfirm('آیا مطمئن هستید که می‌خواهید وضعیت این کلاس را لغو کنید؟', async () => {
+      await db.from('trips').delete().eq('id', tripId);
+      showToast('وضعیت لغو شد');
+      loadData();
+    });
   }
 
-  // ثبت مسیر اضافه (تکی یا چند نفره هم‌زمان)
+  // ثبت مسیر اضافه (تکی یا گروهی بدون تقسیم قیمت)
   async function addExtraTrip() {
     const people = state.selectedExtraPeople;
     const trip_type = document.getElementById('extraTitle').value.trim();
     const rawAmount = parseRawNumber(document.getElementById('extraPrice').value);
-    const splitMode = document.getElementById('extraSplitMode').value;
     const trip_date = dateInput.value;
 
     if (people.length === 0) return showToast('حداقل یک نفر را انتخاب کنید');
     if (!trip_type || !rawAmount) return showToast('عنوان مسیر و مبلغ را وارد کنید');
 
-    const finalAmount = (people.length > 1 && splitMode === 'SPLIT')
-      ? Math.round(rawAmount / people.length)
-      : rawAmount;
-
-    const rows = people.map(p => ({
-      person: p,
+    const personLabel = people.join(' و ');
+    const { error } = await db.from('trips').insert([{
+      person: personLabel,
       trip_type: people.length > 1 ? `${trip_type} (مشترک)` : trip_type,
-      amount: finalAmount,
+      amount: rawAmount,
       trip_date
-    }));
+    }]);
 
-    const { error } = await db.from('trips').insert(rows);
     if (!error) {
       document.getElementById('extraTitle').value = '';
       document.getElementById('extraPrice').value = '';
-      showToast(`✅ مسیر اضافه برای ${people.length} نفر ثبت شد`);
+      showToast(`🟢 مسیر برای «${personLabel}» ثبت شد`);
       loadData();
     } else {
       showToast('خطا: ' + error.message);
     }
   }
 
-  // ثبت برنامه ثابت هفتگی (چند روز + چند نفر هم‌زمان)
+  // ثبت برنامه ثابت هفتگی (چند روز هم‌زمان + کلاس دوتایی/مشترک در یک ردیف بدون تقسیم)
   async function addScheduleItem() {
     const people = state.selectedSchedPeople;
     const title = document.getElementById('schedTitle').value.trim();
     const rawPrice = parseRawNumber(document.getElementById('schedPrice').value);
-    const splitMode = document.getElementById('schedSplitMode').value;
 
     if (people.length === 0) return showToast('حداقل یک نفر را انتخاب کنید');
     if (!title || !rawPrice) return showToast('عنوان و مبلغ را وارد کنید');
 
-    const finalPrice = (people.length > 1 && splitMode === 'SPLIT')
-      ? Math.round(rawPrice / people.length)
-      : rawPrice;
-
-    const rows = [];
-    state.selectedSchedDays.forEach(dayId => {
-      people.forEach(p => {
-        rows.push({ day_of_week: dayId, person: p, title, price: finalPrice });
-      });
-    });
+    const personLabel = people.join(' و ');
+    const rows = state.selectedSchedDays.map(dayId => ({
+      day_of_week: dayId,
+      person: personLabel,
+      title,
+      price: rawPrice
+    }));
 
     const { error } = await db.from('weekly_schedule').insert(rows);
     if (!error) {
       document.getElementById('schedTitle').value = '';
       document.getElementById('schedPrice').value = '';
-      showToast('📅 در برنامه هفتگی ذخیره شد');
+      showToast(`📅 برنامه برای «${personLabel}» ذخیره شد`);
       loadData();
     } else {
       showToast('خطا: ' + error.message);
     }
   }
 
-  // قابلیت ۱: تسویه حساب با راننده (ثبت نقطه تسویه در تاریخچه بدون پاک شدن داده‌ها)
+  // تسویه تکی برای هر رفت‌وآمد
+  function settleSingleTrip(trip) {
+    askConfirm(`آیا مطمئن هستید که کرایه «${trip.person} - ${trip.trip_type.replace(' (نرفتم)', '')}» تسویه شد؟`, async () => {
+      const cleanType = trip.trip_type.includes('[تسویه شده]') ? trip.trip_type : `${trip.trip_type} [تسویه شده]`;
+      const { error } = await db.from('trips').update({ trip_type: cleanType }).eq('id', trip.id);
+      if (!error) {
+        showToast('🤝 این رفت‌وآمد تسویه شد');
+        loadData();
+      }
+    });
+  }
+
+  function isScheduleValidForActivePeople(schedItem, activeNames) {
+    const members = schedItem.person.split(' و ').map(s => s.trim());
+    return members.every(m => activeNames.includes(m));
+  }
+
+  // قابلیت ۱: تسویه حساب کامل با راننده
   function settleAccount() {
-    askConfirm('آیا با راننده تسویه حساب کردید؟ (بدهی فعلی صفر می‌شود و شمارش دوره جدید از همین لحظه شروع می‌شود)', async () => {
+    askConfirm('آیا مطمئن هستید که کل حساب با راننده تسویه شده است؟', async () => {
       const today = new Date().toISOString().split('T')[0];
       const { error } = await db.from('trips').insert([{
         person: 'سیستم',
@@ -1523,15 +1683,17 @@
   }
 
   function deleteScheduleItem(id) {
-    askConfirm('این مورد از برنامه ثابت حذف شود؟', async () => {
+    askConfirm('آیا مطمئن هستید که می‌خواهید این مورد را از برنامه هفته حذف کنید؟', async () => {
       await db.from('weekly_schedule').delete().eq('id', id);
+      showToast('حذف شد');
       loadData();
     });
   }
 
   function deleteTripRecord(id) {
-    askConfirm('این رکورد حذف شود؟', async () => {
+    askConfirm('آیا مطمئن هستید که می‌خواهید این رکورد را برای همیشه حذف کنید؟', async () => {
       await db.from('trips').delete().eq('id', id);
+      showToast('حذف شد');
       loadData();
     });
   }
@@ -1546,18 +1708,19 @@
   }
 
   function deletePerson(id, name) {
-    askConfirm(`فرد «${name}» و تمام برنامه هفتگی او حذف شوند؟`, async () => {
+    askConfirm(`آیا مطمئن هستید که می‌خواهید «${name}» و برنامه‌های هفتگی او را حذف کنید؟`, async () => {
       await db.from('people').delete().eq('id', id);
-      if (name) {
-        await db.from('weekly_schedule').delete().eq('person', name);
+      const relatedSchedules = state.schedule.filter(s => s.person.split(' و ').map(x => x.trim()).includes(name));
+      for (const item of relatedSchedules) {
+        await db.from('weekly_schedule').delete().eq('id', item.id);
       }
-      showToast(`«${name}» و برنامه‌های هفتگی او حذف شدند`);
+      showToast(`«${name}» حذف شد`);
       loadData();
     });
   }
 
-  function toggleFolder(name) {
-    state.openFolders[name] = !state.openFolders[name];
+  function toggleFolder(key) {
+    state.openFolders[key] = !state.openFolders[key];
     renderAll();
   }
 
@@ -1567,14 +1730,12 @@
       const active = state.selectedExtraPeople.includes(p.name);
       return `<button type="button" class="pill-btn ${active ? 'active' : ''}" onclick="toggleMultiSelect(state.selectedExtraPeople, '${p.name}')">${active ? '✓ ' : '👤 '}${p.name}</button>`;
     }).join('');
-    document.getElementById('extraSplitBox').classList.toggle('hidden', state.selectedExtraPeople.length <= 1);
 
     // دکمه‌های چند انتخابی افراد در تب برنامه هفته
     document.getElementById('schedPersonPills').innerHTML = state.people.map(p => {
       const active = state.selectedSchedPeople.includes(p.name);
       return `<button type="button" class="pill-btn ${active ? 'active' : ''}" onclick="toggleMultiSelect(state.selectedSchedPeople, '${p.name}')">${active ? '✓ ' : '👤 '}${p.name}</button>`;
     }).join('');
-    document.getElementById('schedSplitBox').classList.toggle('hidden', state.selectedSchedPeople.length <= 1);
 
     // 1. رندر تب «تایید امروز»
     const selDateStr = dateInput.value;
@@ -1583,7 +1744,7 @@
     document.getElementById('todayDayLabel').textContent = `برنامه ${dayObj ? dayObj.name : ''} (${toPersianDate(selDateStr)})`;
 
     const activePeopleNames = state.people.map(p => p.name);
-    const todaysPlanned = state.schedule.filter(s => s.day_of_week === dayOfWeek && activePeopleNames.includes(s.person));
+    const todaysPlanned = state.schedule.filter(s => s.day_of_week === dayOfWeek && isScheduleValidForActivePeople(s, activePeopleNames));
     const todaysConfirmed = state.trips.filter(t => t.trip_date === selDateStr);
 
     const remainingCount = todaysPlanned.filter(item =>
@@ -1598,6 +1759,7 @@
       </div>`;
     } else {
       checklistEl.innerHTML = todaysPlanned.map(item => {
+        const isGroup = item.person.includes(' و ');
         const matched = todaysConfirmed.find(t => t.person === item.person && t.trip_type.startsWith(item.title));
         if (matched) {
           const wasAbsent = matched.trip_type.includes('(نرفتم)');
@@ -1605,8 +1767,9 @@
             <div class="today-item ${wasAbsent ? 'absent' : 'done'}">
               <div class="today-top">
                 <div>
-                  <strong>👤 ${item.person} — ${item.title}</strong>
-                  <div style="font-size:0.8rem; color:${wasAbsent ? 'var(--danger)' : 'var(--success)'}; margin-top:3px;">
+                  <span class="green-dot" title="وضعیت ثبت شد"></span>
+                  <strong>${isGroup ? '👥' : '👤'} ${item.person} — ${item.title}</strong>
+                  <div style="font-size:0.8rem; color:${wasAbsent ? 'var(--danger)' : 'var(--success)'}; margin-top:4px; padding-right:18px;">
                     ${wasAbsent ? '❌ ثبت شده: نرفتم (۰ تومان)' : `✅ تایید شد (${formatMoney(matched.amount)})`}
                   </div>
                 </div>
@@ -1618,7 +1781,7 @@
           return `
             <div class="today-item">
               <div class="today-top">
-                <strong>👤 ${item.person} — ${item.title}</strong>
+                <strong>${isGroup ? '👥' : '👤'} ${item.person} — ${item.title}</strong>
                 <span style="color:var(--primary); font-weight:700; font-size:0.88rem;">${formatMoney(item.price)}</span>
               </div>
               <div class="today-actions">
@@ -1631,70 +1794,86 @@
       }).join('');
     }
 
-    // 2. رندر تب «برنامه هفته» + پوشه افراد
+    // 2. رندر تب «برنامه هفته» + پوشه افراد + پوشه کلاس‌های دوتایی/مشترک
     document.getElementById('dayPills').innerHTML = DAYS.map(d => {
       const isSelected = state.selectedSchedDays.includes(d.id);
       return `<button type="button" class="pill-btn ${isSelected ? 'active' : ''}" onclick="toggleMultiSelect(state.selectedSchedDays, ${d.id})">${isSelected ? '✓ ' : ''}${d.name}</button>`;
     }).join('');
 
-    // پوشه‌بندی افراد پایین برنامه هفته
-    document.getElementById('personFolders').innerHTML = state.people.map(p => {
+    const dayOrder = [6, 0, 1, 2, 3, 4, 5];
+    const renderFolderItems = (items) => {
+      if (items.length === 0) return '<div style="color:var(--muted); font-size:0.8rem; padding-top:8px;">هنوز برنامه‌ای در این پوشه ثبت نشده است.</div>';
+      const sorted = [...items].sort((a, b) => dayOrder.indexOf(a.day_of_week) - dayOrder.indexOf(b.day_of_week));
+      return sorted.map(s => {
+        const dName = DAYS.find(d => d.id === s.day_of_week)?.name || '';
+        const isGroup = s.person.includes(' و ');
+        return `
+          <div class="log-item">
+            <div>
+              <span style="background:rgba(234,179,8,0.16); color:var(--primary); padding:2px 7px; border-radius:6px; font-size:0.74rem; margin-left:6px;">${dName}</span>
+              <span>${s.title}</span>
+              ${isGroup ? `<span style="font-size:0.75rem; color:var(--muted);"> (${s.person})</span>` : ''}
+              <div style="font-size:0.78rem; color:var(--primary); margin-top:2px;">${formatMoney(s.price)}</div>
+            </div>
+            <button class="del-btn" onclick="deleteScheduleItem(${s.id})">حذف</button>
+          </div>
+        `;
+      }).join('');
+    };
+
+    // پوشه اختصاصی کلاس‌های دوتایی و مشترک
+    const groupItems = state.schedule.filter(s => s.person.includes(' و ') && isScheduleValidForActivePeople(s, activePeopleNames));
+    const isGroupOpen = !!state.openFolders['__GROUP__'];
+    const groupFolderHtml = `
+      <div class="folder-card" style="border-color: rgba(234, 179, 8, 0.35);">
+        <div class="folder-header" onclick="toggleFolder('__GROUP__')">
+          <span>👥 پوشه <strong>کلاس‌های دوتایی و مشترک</strong> (${groupItems.length} مورد)</span>
+          <span>${isGroupOpen ? '▲' : '▼'}</span>
+        </div>
+        ${isGroupOpen ? `<div class="folder-body">${renderFolderItems(groupItems)}</div>` : ''}
+      </div>
+    `;
+
+    // پوشه‌های انفرادی هر فرد
+    const individualFoldersHtml = state.people.map(p => {
       const personItems = state.schedule.filter(s => s.person === p.name);
       const isOpen = !!state.openFolders[p.name];
-      // مرتب‌سازی بر اساس روزهای هفته از شنبه تا جمعه
-      const dayOrder = [6, 0, 1, 2, 3, 4, 5];
-      personItems.sort((a, b) => dayOrder.indexOf(a.day_of_week) - dayOrder.indexOf(b.day_of_week));
-
       return `
         <div class="folder-card">
           <div class="folder-header" onclick="toggleFolder('${p.name}')">
             <span>📁 پوشه کلاس‌های <strong>${p.name}</strong> (${personItems.length} مورد)</span>
             <span>${isOpen ? '▲' : '▼'}</span>
           </div>
-          ${isOpen ? `
-            <div class="folder-body">
-              ${personItems.length === 0 ? '<div style="color:var(--muted); font-size:0.8rem; padding-top:8px;">هنوز برنامه‌ای برای این فرد ثبت نشده است.</div>' :
-                personItems.map(s => {
-                  const dName = DAYS.find(d => d.id === s.day_of_week)?.name || '';
-                  return `
-                    <div class="log-item">
-                      <div>
-                        <span style="background:rgba(234,179,8,0.16); color:var(--primary); padding:2px 7px; border-radius:6px; font-size:0.74rem; margin-left:6px;">${dName}</span>
-                        <span>${s.title}</span>
-                        <div style="font-size:0.78rem; color:var(--primary); margin-top:2px;">${formatMoney(s.price)}</div>
-                      </div>
-                      <button class="del-btn" onclick="deleteScheduleItem(${s.id})">حذف</button>
-                    </div>
-                  `;
-                }).join('')
-              }
-            </div>
-          ` : ''}
+          ${isOpen ? `<div class="folder-body">${renderFolderItems(personItems)}</div>` : ''}
         </div>
       `;
     }).join('');
 
-    // 3. رندر تب «گزارش مالی» (محاسبه از آخرین نقطه تسویه + آمار حضور و غیبت)
+    document.getElementById('personFolders').innerHTML = groupFolderHtml + individualFoldersHtml;
+
+    // 3. رندر تب «گزارش مالی» (پشتیبانی از تسویه تکی و تسویه کلی + آمار حضور و غیبت)
     const lastSettleIndex = state.trips.findIndex(t => t.person === 'سیستم' && t.trip_type.includes('تسویه حساب'));
-    const activeTrips = lastSettleIndex === -1 ? state.trips : state.trips.slice(0, lastSettleIndex);
+    const periodTrips = lastSettleIndex === -1 ? state.trips : state.trips.slice(0, lastSettleIndex);
 
     const monthAgo = new Date();
     monthAgo.setDate(monthAgo.getDate() - 30);
 
     let unsettledSum = 0, monthSum = 0;
-    const statsPerPerson = {};
+    const statsPerGroup = {};
     state.people.forEach(p => {
-      statsPerPerson[p.name] = { amount: 0, presentCount: 0, absentCount: 0 };
+      statsPerGroup[p.name] = { amount: 0, presentCount: 0, absentCount: 0 };
     });
 
-    activeTrips.forEach(t => {
+    periodTrips.forEach(t => {
       if (t.person === 'سیستم') return;
-      const amt = Number(t.amount);
+      const isItemSettled = t.trip_type.includes('[تسویه شده]');
+      const amt = isItemSettled ? 0 : Number(t.amount);
       unsettledSum += amt;
-      if (!statsPerPerson[t.person]) statsPerPerson[t.person] = { amount: 0, presentCount: 0, absentCount: 0 };
-      statsPerPerson[t.person].amount += amt;
-      if (t.trip_type.includes('(نرفتم)')) statsPerPerson[t.person].absentCount++;
-      else statsPerPerson[t.person].presentCount++;
+
+      if (!statsPerGroup[t.person]) statsPerGroup[t.person] = { amount: 0, presentCount: 0, absentCount: 0 };
+      statsPerGroup[t.person].amount += amt;
+      if (t.trip_type.includes('(نرفتم)')) statsPerGroup[t.person].absentCount++;
+      else statsPerGroup[t.person].presentCount++;
     });
 
     state.trips.forEach(t => {
@@ -1705,173 +1884,65 @@
     document.getElementById('unsettledTotal').textContent = formatMoney(unsettledSum);
     document.getElementById('monthTotal').textContent = formatMoney(monthSum);
 
-    document.getElementById('personBreakdown').innerHTML = Object.keys(statsPerPerson).map(name => {
-      const st = statsPerPerson[name];
-      return `
-        <div class="today-item" style="margin-bottom:8px;">
-          <div class="today-top">
-            <div>
-              <strong>👤 ${name}</strong>
-              <div style="font-size:0.78rem; color:var(--muted); margin-top:3px;">
-                ✅ ${st.presentCount} سرویس رفت &nbsp;|&nbsp; ❌ ${st.absentCount} غیبت
+    document.getElementById('personBreakdown').innerHTML = Object.keys(statsPerGroup)
+      .filter(k => statsPerGroup[k].presentCount > 0 || statsPerGroup[k].absentCount > 0 || activePeopleNames.includes(k))
+      .map(name => {
+        const st = statsPerGroup[name];
+        const isGroup = name.includes(' و ');
+        return `
+          <div class="today-item" style="margin-bottom:8px;">
+            <div class="today-top">
+              <div>
+                <strong>${isGroup ? '👥' : '👤'} ${name}</strong>
+                <div style="font-size:0.78rem; color:var(--muted); margin-top:3px;">
+                  ✅ ${st.presentCount} سرویس رفت &nbsp;|&nbsp; ❌ ${st.absentCount} غیبت
+                </div>
               </div>
+              <div style="color:var(--primary); font-weight:700; font-size:0.95rem;">${formatMoney(st.amount)}</div>
             </div>
-            <div style="color:var(--primary); font-weight:700; font-size:0.95rem;">${formatMoney(st.amount)}</div>
           </div>
-        </div>
-      `;
-    }).join('');
+        `;
+      }).join('');
 
     const filterSel = document.getElementById('filterPerson');
     const curFilter = filterSel.value;
-    filterSel.innerHTML = `<option value="ALL">همه افراد</option>` +
-      state.people.map(p => `<option value="${p.name}" ${curFilter === p.name ? 'selected' : ''}>${p.name}</option>`).join('');
+    const allTripOwners = [...new Set([...activePeopleNames, ...state.trips.filter(t => t.person !== 'سیستم').map(t => t.person)])];
+    filterSel.innerHTML = `<option value="ALL">همه موارد</option>` +
+      allTripOwners.map(name => `<option value="${name}" ${curFilter === name ? 'selected' : ''}>${name}</option>`).join('');
 
     const filtered = curFilter === 'ALL' ? state.trips : state.trips.filter(t => t.person === curFilter);
-    document.getElementById('fullLogs').innerHTML = filtered.map(t => `
-      <div class="log-item">
-        <div>
-          <strong>${t.person}</strong> — ${t.trip_type}
-          <div style="font-size:0.75rem; color:var(--muted);">${toPersianDate(t.trip_date)}</div>
+    document.getElementById('fullLogs').innerHTML = filtered.map((t, idx) => {
+      if (t.person === 'سیستم') {
+        return `<div class="log-item" style="justify-content:center; color:var(--success); font-weight:700;">${t.trip_type} (${toPersianDate(t.trip_date)})</div>`;
+      }
+      const isGlobalSettled = lastSettleIndex !== -1 && idx > lastSettleIndex;
+      const isSingleSettled = t.trip_type.includes('[تسویه شده]');
+      const isSettled = isGlobalSettled || isSingleSettled;
+      const cleanTitle = t.trip_type.replace(' [تسویه شده]', '');
+
+      return `
+        <div class="log-item">
+          <div>
+            <strong>${t.person}</strong> — ${cleanTitle}
+            <div style="font-size:0.75rem; color:var(--muted);">${toPersianDate(t.trip_date)}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+            <span style="color:${isSettled ? 'var(--muted)' : 'var(--primary)'}; text-decoration:${isSettled ? 'line-through' : 'none'};">${formatMoney(t.amount)}</span>
+            ${isSettled
+              ? `<span class="settled-tag">✓ تسویه شده</span>`
+              : (Number(t.amount) > 0 ? `<button class="btn-settle-item" onclick='settleSingleTrip(${JSON.stringify(t)})'>تسویه شد</button>` : '')
+            }
+            <button class="del-btn" onclick="deleteTripRecord(${t.id})">حذف</button>
+          </div>
         </div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="color:var(--primary);">${formatMoney(t.amount)}</span>
-          <button class="del-btn" onclick="deleteTripRecord(${t.id})">حذف</button>
-        </div>
-      </div>
-    `).join('') || '<div style="color:var(--muted);">هنوز ترددی ثبت نشده است.</div>';
+      `;
+    }).join('') || '<div style="color:var(--muted);">هنوز ترددی ثبت نشده است.</div>';
 
     // 4. رندر تب «تنظیمات» (مدیریت افراد)
     document.getElementById('peopleManageList').innerHTML = state.people.map(p => `
       <div class="log-item">
         <span>👤 ${p.name}</span>
         <button class="del-btn" onclick="deletePerson(${p.id}, '${p.name}')">حذف</button>
-      </div>
-    `).join('');
-  }
-
-  function copyReport() {
-    let text = `📊 صورت‌حساب سرویس مدرسه\n`;
-    text += `• جمع بدهی قابل پرداخت: ${document.getElementById('unsettledTotal').textContent}\n\n`;
-    document.querySelectorAll('#personBreakdown .today-item').forEach(el => {
-      text += `- ${el.innerText.replace(/\n+/g, ' | ')}\n`;
-    });
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    showToast('📋 صورت‌حساب کپی شد!');
-  }
-
-  loadData();
-</script>
-</body>
-</html>
-      personItems.sort((a, b) => dayOrder.indexOf(a.day_of_week) - dayOrder.indexOf(b.day_of_week));
-
-      return `
-        <div class="folder-card">
-          <div class="folder-header" onclick="toggleFolder('${p.name}')">
-            <span>📁 پوشه کلاس‌های <strong>${p.name}</strong> (${personItems.length} مورد)</span>
-            <span>${isOpen ? '▲' : '▼'}</span>
-          </div>
-          ${isOpen ? `
-            <div class="folder-body">
-              ${personItems.length === 0 ? '<div style="color:var(--muted); font-size:0.8rem; padding-top:8px;">هنوز برنامه‌ای برای این فرد ثبت نشده است.</div>' :
-                personItems.map(s => {
-                  const dName = DAYS.find(d => d.id === s.day_of_week)?.name || '';
-                  return `
-                    <div class="log-item">
-                      <div>
-                        <span style="background:rgba(234,179,8,0.16); color:var(--primary); padding:2px 7px; border-radius:6px; font-size:0.74rem; margin-left:6px;">${dName}</span>
-                        <span>${s.title}</span>
-                        <div style="font-size:0.78rem; color:var(--primary); margin-top:2px;">${formatMoney(s.price)}</div>
-                      </div>
-                      <button class="del-btn" onclick="deleteScheduleItem(${s.id})">حذف</button>
-                    </div>
-                  `;
-                }).join('')
-              }
-            </div>
-          ` : ''}
-        </div>
-      `;
-    }).join('');
-
-    // 3. رندر تب «گزارش مالی» (محاسبه از آخرین نقطه تسویه + آمار حضور و غیبت)
-    const lastSettleIndex = state.trips.findIndex(t => t.person === 'سیستم' && t.trip_type.includes('تسویه حساب'));
-    const activeTrips = lastSettleIndex === -1 ? state.trips : state.trips.slice(0, lastSettleIndex);
-
-    const monthAgo = new Date();
-    monthAgo.setDate(monthAgo.getDate() - 30);
-
-    let unsettledSum = 0, monthSum = 0;
-    const statsPerPerson = {};
-    state.people.forEach(p => {
-      statsPerPerson[p.name] = { amount: 0, presentCount: 0, absentCount: 0 };
-    });
-
-    activeTrips.forEach(t => {
-      if (t.person === 'سیستم') return;
-      const amt = Number(t.amount);
-      unsettledSum += amt;
-      if (!statsPerPerson[t.person]) statsPerPerson[t.person] = { amount: 0, presentCount: 0, absentCount: 0 };
-      statsPerPerson[t.person].amount += amt;
-      if (t.trip_type.includes('(نرفتم)')) statsPerPerson[t.person].absentCount++;
-      else statsPerPerson[t.person].presentCount++;
-    });
-
-    state.trips.forEach(t => {
-      if (t.person === 'سیستم') return;
-      if (new Date(t.trip_date) >= monthAgo) monthSum += Number(t.amount);
-    });
-
-    document.getElementById('unsettledTotal').textContent = formatMoney(unsettledSum);
-    document.getElementById('monthTotal').textContent = formatMoney(monthSum);
-
-    document.getElementById('personBreakdown').innerHTML = Object.keys(statsPerPerson).map(name => {
-      const st = statsPerPerson[name];
-      return `
-        <div class="today-item" style="margin-bottom:8px;">
-          <div class="today-top">
-            <div>
-              <strong>👤 ${name}</strong>
-              <div style="font-size:0.78rem; color:var(--muted); margin-top:3px;">
-                ✅ ${st.presentCount} سرویس رفت &nbsp;|&nbsp; ❌ ${st.absentCount} غیبت
-              </div>
-            </div>
-            <div style="color:var(--primary); font-weight:700; font-size:0.95rem;">${formatMoney(st.amount)}</div>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    const filterSel = document.getElementById('filterPerson');
-    const curFilter = filterSel.value;
-    filterSel.innerHTML = `<option value="ALL">همه افراد</option>` +
-      state.people.map(p => `<option value="${p.name}" ${curFilter === p.name ? 'selected' : ''}>${p.name}</option>`).join('');
-
-    const filtered = curFilter === 'ALL' ? state.trips : state.trips.filter(t => t.person === curFilter);
-    document.getElementById('fullLogs').innerHTML = filtered.map(t => `
-      <div class="log-item">
-        <div>
-          <strong>${t.person}</strong> — ${t.trip_type}
-          <div style="font-size:0.75rem; color:var(--muted);">${toPersianDate(t.trip_date)}</div>
-        </div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="color:var(--primary);">${formatMoney(t.amount)}</span>
-          <button class="del-btn" onclick="deleteTripRecord(${t.id})">حذف</button>
-        </div>
-      </div>
-    `).join('') || '<div style="color:var(--muted);">هنوز ترددی ثبت نشده است.</div>';
-
-    // 4. رندر تب «تنظیمات» (مدیریت افراد)
-    document.getElementById('peopleManageList').innerHTML = state.people.map(p => `
-      <div class="log-item">
-        <span>👤 ${p.name}</span>
-        <button class="del-btn" onclick="deletePerson(${p.id})">حذف</button>
       </div>
     `).join('');
   }
